@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-telegram-bot
+langchain-openai
+langgraph
+python-dotenv
+httpx
+pydantic-settings
+pyyaml
+structlog
