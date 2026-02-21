@@ -1,8 +1,8 @@
-# WhatsApp Assistant — Architecture & Tech Stack
+# Telegram Assistant — Architecture & Tech Stack
 
 ## Overview
 
-A WhatsApp-based personal assistant that serves multiple people (mom, sister, etc.) from one WhatsApp number. Each person gets different behavior/persona + different tools. Implemented as one bot with a routing layer.
+A Telegram-based personal assistant that serves multiple people (mom, sister, etc.) from one WhatsApp number. Each person gets different behavior/persona + different tools. Implemented as one bot with a routing layer.
 
 ## WhatsApp Number Setup
 
