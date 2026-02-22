@@ -1,13 +1,13 @@
 import operator
-from typing import Annotated, TypedDict
-
-from langchain_core.messages import BaseMessage
+from typing import Annotated, TypedDict, Union
 
 
 class AgentState(TypedDict):
     user_id: str
     username: str
     profile_slug: str
-    messages: Annotated[list[BaseMessage], operator.add]
+    profile_persona: str
+    messages: Annotated[list[dict[str, str]], operator.add]
     incoming_text: str
     response_text: str
+    intent: str
