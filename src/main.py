@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 from telegram import Update
-from telegram.constants import ParseMode, ReactionEmoji
+from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 
@@ -15,6 +15,10 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 MAX_FAILED_ATTEMPTS = 10
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Unhandled exception while processing Telegram update", exc_info=context.error)
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not update.message or not update.message.text:
@@ -51,7 +55,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # React with thumbs up on the MATAR message
         try:
             if update.message:
-                await update.message.set_reaction(reaction=ReactionEmoji.THUMBS_UP)
+                await update.message.set_reaction(reaction="👍")
         except Exception as e:
             logger.error(f"Failed to react to MATAR: {e}")
             
@@ -187,8 +191,12 @@ def main():
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
+    # Avoid logging Telegram request URLs (the bot token is part of the path).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).concurrent_updates(True).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+    app.add_error_handler(error_handler)
     logger.info("Bot starting with polling and concurrent updates...")
     app.run_polling()
 
