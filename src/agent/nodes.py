@@ -168,7 +168,7 @@ Respond with ONLY the category name: "action" or "query"
 def get_gemini_model():
     if not settings.GOOGLE_API_KEY:
         return None
-    return genai.GenerativeModel("gemini-2.5-flash")
+    return genai.GenerativeModel("gemini-3-flash")
 
 
 def format_history(messages: list[dict[str, str]]) -> str:
