@@ -3,3 +3,6 @@ langgraph
 pydantic-settings
 pyyaml
 google-generativeai
+aiosqlite
+aiolimiter
+tenacity

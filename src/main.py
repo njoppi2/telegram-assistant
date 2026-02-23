@@ -59,15 +59,20 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         shared.active_status_messages.pop(user_id, None)
         return
 
-    # Load auth state from SQLite
-    auth = await shared.get_user_auth(user_id)
+    # If no password is configured, disable the auth gate entirely.
+    auth_password = settings.AUTH_PASSWORD.strip()
+    if not auth_password:
+        auth = {"failed_attempts": 0, "is_blocked": 0, "is_authenticated": 1}
+    else:
+        # Load auth state from SQLite only when auth is enabled.
+        auth = await shared.get_user_auth(user_id)
     
     if auth["is_blocked"]:
         logger.warning(f"Blocked user {user_id} attempted message")
         return
 
     if not auth["is_authenticated"]:
-        if text.strip() == settings.AUTH_PASSWORD:
+        if text.strip() == auth_password:
             await shared.update_user_auth(user_id, failed_attempts=0, is_blocked=0, is_authenticated=1)
             logger.info(f"User {user_id} authenticated successfully")
             await update.message.reply_text("Access granted. You can now use the bot.")

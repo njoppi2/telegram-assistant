@@ -4,7 +4,7 @@ Telegram bot serving multiple users from one bot token, routes each user to a di
 Each user maps to a YAML file in `profiles/`. Profile defines `telegram_user_id`, `persona` (system prompt), and `tools` list. Router in `src/router/` loads profile by `user_id`. LangGraph graph in `src/agent/graph.py` passes `AgentState` through nodes: `load_profile` → `call_llm` (→ more nodes as tools are added).
 
 ## Credentials
-Secrets live in `.env` (project root). Keys used by the current code: `TELEGRAM_BOT_TOKEN`, `GOOGLE_API_KEY`, `AUTH_PASSWORD` (optional).
+Secrets live in `.env` (project root). Keys used by the current code: `TELEGRAM_BOT_TOKEN`, `GOOGLE_API_KEY`, `AUTH_PASSWORD` (optional; if empty, password gate is disabled).
 
 ## Adding a user
 Copy any profile YAML, set `telegram_user_id` to their numeric Telegram ID (get it by having them message `@userinfobot`), set `persona`.
