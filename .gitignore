@@ -2,3 +2,12 @@
 __pycache__/
 *.pyc
 webhook_events.ndjson
+bot_data.db
+auth_store.json
+history_store.json
+*.bak
+/*.png
+check_telegram_*.py
+inspect_page.py
+test_matar.py
+test_bot_kill_final.py
