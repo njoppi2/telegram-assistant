@@ -18,7 +18,7 @@ GEMINI_NODE_BIN = str(Path(GEMINI_BIN).with_name("node"))
 GEMINI_TIMEOUT_SECONDS = 120
 
 OPENCODE_BIN = str(Path.home() / ".opencode/bin/opencode")
-OPENCODE_MODEL = "opencode/glm-5-free"
+OPENCODE_MODEL = "opencode/minimax-m2.5-free"
 OPENCODE_TIMEOUT_SECONDS = 300 
 
 if settings.GOOGLE_API_KEY:
@@ -141,34 +141,11 @@ Your response will be sent directly to the user via Telegram.
 - Use standard unicode bullets (•) for lists instead of hyphens or asterisks.
 """
 
-INTENT_PROMPT = """Analyze the conversation and the user's LATEST message to classify the intent.
-
-SYSTEM CAPABILITIES (What I can do):
-{capabilities}
-
-CONVERSATION HISTORY:
-{history}
-
-LATEST USER MESSAGE: {message}
-
-DECISION CRITERIA:
-- Classify as "action" if:
-    1. The user is asking for information that requires checking the system (files, directories, git repos, process status).
-    2. The user is asking to perform a task (run a script, control home devices, take screenshots, write code).
-    3. The user is asking a follow-up question about a previous "action" result (e.g., "what's in the first one?", "run it", "show me more").
-    4. Any request that CANNOT be answered accurately without looking at the current state of the computer or external files.
-- Classify as "query" ONLY if:
-    1. It's a general question, greeting, or philosophical discussion that doesn't need system access.
-    2. It's an explanation of a concept already provided.
-
-Respond with ONLY the category name: "action" or "query"
-"""
-
 
 def get_gemini_model():
     if not settings.GOOGLE_API_KEY:
         return None
-    return genai.GenerativeModel("gemini-3-flash")
+    return genai.GenerativeModel("gemini-3-flash-preview")
 
 
 def format_history(messages: list[dict[str, str]]) -> str:
@@ -198,34 +175,6 @@ async def load_profile_node(state) -> dict:
     logger.info(f"Loaded profile '{profile['slug']}' for user {state['user_id']}")
     return {"profile_slug": profile["slug"], "profile_persona": profile["persona"]}
 
-
-async def detect_intent_node(state) -> dict:
-    user_message = state["incoming_text"]
-    history = format_history(state.get("messages", []))
-    model = get_gemini_model()
-    
-    if not model:
-        logger.warning("No Gemini API key, defaulting to action intent")
-        return {"intent": "action"}
-    
-    try:
-        prompt = INTENT_PROMPT.format(
-            capabilities=SYSTEM_CAPABILITIES,
-            history=history,
-            message=user_message
-        )
-        response = await generate_content_with_retry(model, prompt)
-        intent = response.text.strip().lower()
-        
-        if intent not in ("action", "query"):
-            logger.warning(f"Unexpected intent '{intent}', defaulting to action")
-            intent = "action"
-        
-        logger.info(f"Detected intent: {intent}")
-        return {"intent": intent}
-    except Exception as e:
-        logger.error(f"Intent detection failed: {e}")
-        return {"intent": "action"}
 
 
 async def handle_query_node(state) -> dict:

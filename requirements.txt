@@ -6,3 +6,5 @@ google-generativeai
 aiosqlite
 aiolimiter
 tenacity
+litellm
+rich

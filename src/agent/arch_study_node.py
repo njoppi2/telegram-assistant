@@ -18,7 +18,7 @@ from src.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-STUDY_COMMANDS = {"/study", "/skip", "/stop", "/stats", "/archstats", "/cancel", "/quit", "/help"}
+STUDY_COMMANDS = {"/study", "/skip", "/stop", "/stats", "/archstats", "/cancel", "/quit", "/help", "/run"}
 
 
 def _get_topic_core():
@@ -35,11 +35,13 @@ async def check_study_session_node(state: AgentState) -> dict:
     text = state["incoming_text"].strip()
     cmd = text.lower().split()[0] if text else ""
 
-    if cmd in STUDY_COMMANDS:
-        return {"intent": "arch_study", "study_session": None}
+    if cmd == "/run":
+        remainder = text[4:].strip()
+        if not remainder:
+            return {"intent": "arch_study", "study_session": None}
+        return {"intent": "action", "incoming_text": remainder, "study_session": None}
 
-    # Natural language triggers — treat like /study
-    if text.lower().strip() in _STUDY_TRIGGERS:
+    if cmd in STUDY_COMMANDS:
         return {"intent": "arch_study", "study_session": None}
 
     session = await get_study_session(user_id)
@@ -63,14 +65,19 @@ async def arch_study_node(state: AgentState) -> dict:
     if cmd == "/help":
         return {
             "response_text": (
-                "*Arch-Gym commands*\n\n"
+                "*Commands*\n\n"
                 "/study — start today's study session\n"
-                "/skip — skip current topic, go to next\n"
-                "/stop — end the session\n"
-                "/stats — show your progress\n"
-                "/kill — cancel a running action"
+                "/skip — skip current topic\n"
+                "/stop — end session\n"
+                "/stats — show progress\n"
+                "/run <task> — execute a terminal action\n"
+                "/kill — cancel a running /run\n"
+                "/help — show this message"
             )
         }
+
+    if cmd == "/run":
+        return {"response_text": "Usage: /run <task description>"}
 
     if cmd in ("/stop", "/cancel", "/quit"):
         await clear_study_session(user_id)

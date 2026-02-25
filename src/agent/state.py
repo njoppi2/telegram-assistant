@@ -11,3 +11,4 @@ class AgentState(TypedDict):
     incoming_text: str
     response_text: str
     intent: str
+    study_session: dict | None

@@ -135,7 +135,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         final_state.update(state_update)
 
-                    if node_name == "detect_intent" and final_state.get("intent") == "action":
+                    if node_name == "check_study_session" and final_state.get("intent") == "action":
                         try:
                             if update.message:
                                 await update.message.set_reaction(reaction="👨‍💻")

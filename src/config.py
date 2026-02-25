@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     AUTH_PASSWORD: str = ""
     WEBHOOK_BASE_URL: str = ""
     DEBUG: bool = False
+    ARCH_GYM_PATH: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
