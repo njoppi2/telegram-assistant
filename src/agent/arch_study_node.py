@@ -18,10 +18,7 @@ from src.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-STUDY_COMMANDS = {"/study", "/skip", "/stop", "/stats", "/archstats", "/cancel", "/quit"}
-
-# Natural language triggers that mean "start/continue studying"
-_STUDY_TRIGGERS = {"continue", "continuar", "next", "próxima", "proxima", "seguinte", "estudar", "study"}
+STUDY_COMMANDS = {"/study", "/skip", "/stop", "/stats", "/archstats", "/cancel", "/quit", "/help"}
 
 
 def _get_topic_core():
@@ -60,8 +57,20 @@ async def arch_study_node(state: AgentState) -> dict:
 
     session = state.get("study_session") or await get_study_session(user_id)
 
-    if cmd == "/study" or text.lower().strip() in _STUDY_TRIGGERS:
+    if cmd == "/study":
         return await _start_session(user_id)
+
+    if cmd == "/help":
+        return {
+            "response_text": (
+                "*Arch-Gym commands*\n\n"
+                "/study — start today's study session\n"
+                "/skip — skip current topic, go to next\n"
+                "/stop — end the session\n"
+                "/stats — show your progress\n"
+                "/kill — cancel a running action"
+            )
+        }
 
     if cmd in ("/stop", "/cancel", "/quit"):
         await clear_study_session(user_id)
@@ -72,7 +81,7 @@ async def arch_study_node(state: AgentState) -> dict:
 
     if cmd == "/skip":
         if not session:
-            return await _start_session(user_id)
+            return {"response_text": "No active study session. Send /study to start."}
         return await _advance_to_next(user_id, session, skipped=True)
 
     if not session:

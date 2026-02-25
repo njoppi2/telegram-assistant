@@ -29,7 +29,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     # Command to kill the last execution
-    if text.strip() == "MATAR":
+    if text.strip() in ("/kill", "MATAR"):
         shared.cancel_requested.add(user_id)
         proc = shared.active_subprocesses.get(user_id)
         status_msg = shared.active_status_messages.get(user_id)
@@ -114,6 +114,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "incoming_text": text,
                 "response_text": "",
                 "intent": "",
+                "study_session": None,
             }
 
             final_state = initial_state.copy()
@@ -184,6 +185,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     import asyncio
+    import os
+    import sys
+    if settings.ARCH_GYM_PATH:
+        sys.path.insert(0, settings.ARCH_GYM_PATH)
+        os.environ.setdefault("ARCH_GYM_MODEL", "gemini/gemini-3-flash-preview")
+        os.environ.setdefault("GEMINI_API_KEY", settings.GOOGLE_API_KEY)
+
     loop = asyncio.get_event_loop()
     loop.run_until_complete(shared.init_db())
     
@@ -195,7 +203,7 @@ def main():
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).concurrent_updates(True).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+    app.add_handler(MessageHandler(filters.TEXT, message_handler))
     app.add_error_handler(error_handler)
     logger.info("Bot starting with polling and concurrent updates...")
     app.run_polling()
