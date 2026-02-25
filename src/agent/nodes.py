@@ -261,11 +261,73 @@ async def handle_action_node(state) -> dict:
     
     shared.active_subprocesses[user_id] = proc
 
+    # --- Streaming read with live status updates ---
+    stdout_chunks: list[bytes] = []
+    thinking_log: list[str] = []
+    user_answer_parts: list[str] = []
+    last_edit_time: float = 0.0
+    EDIT_INTERVAL = 1.5  # seconds between Telegram message edits
+
+    async def _try_edit_status(text: str):
+        nonlocal last_edit_time
+        now = asyncio.get_event_loop().time()
+        if now - last_edit_time < EDIT_INTERVAL:
+            return
+        status_msg = shared.active_status_messages.get(user_id)
+        if not status_msg:
+            return
+        try:
+            await status_msg.edit_text(text)
+            last_edit_time = now
+        except Exception:
+            pass  # rate limit or already deleted — ignore
+
+    partial_buf = ""
+
+    async def _read_stdout():
+        nonlocal partial_buf
+        while True:
+            chunk = await proc.stdout.read(4096)
+            if not chunk:
+                break
+            if user_id in shared.cancel_requested:
+                break
+            stdout_chunks.append(chunk)
+            partial_buf += chunk.decode(errors="replace")
+
+            # Try to parse any complete JSON objects from the buffer
+            events, _ = parse_json_stream(partial_buf)
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                e_type = event.get("type")
+                part = event.get("part", {})
+                p_text = part.get("text", "").strip()
+
+                if e_type == "reasoning" and p_text:
+                    snippet = p_text[:200] + ("…" if len(p_text) > 200 else "")
+                    await _try_edit_status(f"🧠 _Thinking…_\n\n{snippet}")
+                    thinking_log.append(f"[Reasoning] {p_text}")
+
+                elif e_type == "tool_use":
+                    tool = part.get("tool", "unknown")
+                    state_data = part.get("state", {})
+                    t_input = state_data.get("input")
+                    t_output = state_data.get("output")
+                    await _try_edit_status(f"🔧 _Running tool:_ `{tool}`")
+                    thinking_log.append(f"[Tool: {tool}] Input: {t_input}")
+                    if isinstance(t_output, str) and len(t_output) > 500:
+                        thinking_log.append(f"[Tool Result] (Long output, {len(t_output)} chars)")
+                    else:
+                        thinking_log.append(f"[Tool Result] {t_output}")
+
+                elif e_type == "text" and p_text:
+                    if p_text not in user_answer_parts:
+                        user_answer_parts.append(p_text)
+
     try:
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(),
-            timeout=OPENCODE_TIMEOUT_SECONDS,
-        )
+        await asyncio.wait_for(_read_stdout(), timeout=OPENCODE_TIMEOUT_SECONDS)
+        await asyncio.wait_for(proc.wait(), timeout=10.0)
     except asyncio.TimeoutError:
         try:
             proc.terminate()
@@ -273,65 +335,52 @@ async def handle_action_node(state) -> dict:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-        
+
         logger.error(f"OpenCode timed out after {OPENCODE_TIMEOUT_SECONDS}s")
         shared.active_subprocesses.pop(user_id, None)
         return {"response_text": "Erro: A operação demorou demais e foi interrompida."}
 
     shared.active_subprocesses.pop(user_id, None)
-    
+
     if user_id in shared.cancel_requested:
         logger.info(f"Action for user {user_id} finished but suppressed.")
         return {"response_text": "Ação interrompida. O resultado foi descartado."}
 
-    raw_output = stdout.decode(errors="replace").strip()
-    
-    thinking_log = []
-    user_answer_parts = []
-    
-    events, method = parse_json_stream(raw_output)
-    
-    if events:
-        for event in events:
-            if not isinstance(event, dict): continue
-            e_type = event.get("type")
-            part = event.get("part", {})
-            p_text = part.get("text", "").strip()
-            
-            if e_type == "reasoning":
-                if p_text: thinking_log.append(f"[Reasoning] {p_text}")
-            elif e_type == "text":
-                if p_text: user_answer_parts.append(p_text)
-            elif e_type == "tool_use":
-                tool = part.get("tool", "unknown")
-                state_data = part.get("state", {})
-                t_input = state_data.get("input")
-                t_output = state_data.get("output")
-                thinking_log.append(f"[Tool: {tool}] Input: {t_input}")
-                if isinstance(t_output, str) and len(t_output) > 500:
-                    thinking_log.append(f"[Tool Result] (Long output, {len(t_output)} chars)")
-                else:
-                    thinking_log.append(f"[Tool Result] {t_output}")
+    # If streaming parse caught nothing, fall back to batch parse of full output
+    raw_output = b"".join(stdout_chunks).decode(errors="replace").strip()
+    if not user_answer_parts and not thinking_log:
+        events, method = parse_json_stream(raw_output)
+        if events:
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                e_type = event.get("type")
+                part = event.get("part", {})
+                p_text = part.get("text", "").strip()
+                if e_type == "reasoning" and p_text:
+                    thinking_log.append(f"[Reasoning] {p_text}")
+                elif e_type == "text" and p_text:
+                    user_answer_parts.append(p_text)
+                elif e_type == "tool_use":
+                    tool = part.get("tool", "unknown")
+                    thinking_log.append(f"[Tool: {tool}]")
+        else:
+            logger.warning(f"Structured parsing failed for {user_id}. Fallback activated.")
+            clean_text = strip_ansi(raw_output)
+            substantive_lines = []
+            for line in clean_text.split('\n'):
+                l = line.strip()
+                if l.startswith('{') or l.startswith('[') or l.endswith('}') or l.endswith(']'): continue
+                if '"type":' in l or '"part":' in l or '"timestamp":' in l: continue
+                if any(l.lower().startswith(x) for x in ['thinking:', 'thought:', '✱', '→', '> build']): continue
+                if l: substantive_lines.append(line)
+            user_answer_parts = ["\n".join(substantive_lines).strip()]
 
-        response_text = "\n\n".join(user_answer_parts).strip()
-        if thinking_log:
-            logger.info(f"OpenCode process ({method}) for {user_id}:\n" + "\n".join(thinking_log))
-    else:
-        logger.warning(f"Structured parsing failed for {user_id}. Fallback activated.")
-        # IMPROVED FALLBACK: Never dump JSON
-        clean_text = strip_ansi(raw_output)
-        substantive_lines = []
-        for line in clean_text.split('\n'):
-            l = line.strip()
-            # If line is mostly JSON characters, skip it
-            if l.startswith('{') or l.startswith('[') or l.endswith('}') or l.endswith(']'): continue
-            if '"type":' in l or '"part":' in l or '"timestamp":' in l: continue
-            if any(l.lower().startswith(x) for x in ['thinking:', 'thought:', '✱', '→', '> build']): continue
-            if l: substantive_lines.append(line)
-        response_text = "\n".join(substantive_lines).strip()
+    if thinking_log:
+        logger.info(f"OpenCode stream for {user_id}:\n" + "\n".join(thinking_log))
 
+    response_text = "\n\n".join(user_answer_parts).strip()
     if not response_text:
-        # If we have tool output but no answer, summarize from thinking_log
         if thinking_log:
             response_text = "Ação concluída no terminal (nenhum resumo final gerado pelo modelo)."
         else:
