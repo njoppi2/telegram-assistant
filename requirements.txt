@@ -2,7 +2,7 @@ python-telegram-bot
 langgraph
 pydantic-settings
 pyyaml
-google-generativeai
+google-genai
 aiosqlite
 aiolimiter
 tenacity

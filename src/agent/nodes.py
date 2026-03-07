@@ -4,7 +4,7 @@ import re
 import json
 from pathlib import Path
 
-import google.generativeai as genai
+from google import genai
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.config import settings
@@ -22,7 +22,6 @@ OPENCODE_MODEL = "opencode/minimax-m2.5-free"
 OPENCODE_TIMEOUT_SECONDS = 300 
 
 if settings.GOOGLE_API_KEY:
-    genai.configure(api_key=settings.GOOGLE_API_KEY)
     logger.info("Gemini API configured")
 
 def strip_ansi(text: str) -> str:
@@ -88,8 +87,15 @@ def parse_json_stream(text: str):
     return [], "failed"
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-async def generate_content_with_retry(model, prompt):
-    return await asyncio.to_thread(model.generate_content, prompt)
+async def generate_content_with_retry(prompt: str):
+    client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+    try:
+        return await client.aio.models.generate_content(
+            model="gemini-3-flash-preview",
+            contents=prompt,
+        )
+    finally:
+        await client.aio.aclose()
 
 SYSTEM_CAPABILITIES = """
 You have access to the following system capabilities and scripts:
@@ -142,12 +148,6 @@ Your response will be sent directly to the user via Telegram.
 """
 
 
-def get_gemini_model():
-    if not settings.GOOGLE_API_KEY:
-        return None
-    return genai.GenerativeModel("gemini-3-flash-preview")
-
-
 def format_history(messages: list[dict[str, str]]) -> str:
     if not messages:
         return "No history."
@@ -191,9 +191,8 @@ async def handle_query_node(state) -> dict:
     user_message = state["incoming_text"]
     history = state.get("messages", [])
     persona = state.get("profile_persona", "")
-    model = get_gemini_model()
-    
-    if not model:
+
+    if not settings.GOOGLE_API_KEY:
         return {"response_text": "Gemini API key not configured. Cannot process simple queries."}
     
     try:
@@ -216,9 +215,16 @@ async def handle_query_node(state) -> dict:
             f"User message: {user_message}"
         )
         
-        response = await generate_content_with_retry(model, full_prompt)
+        response = await generate_content_with_retry(full_prompt)
+        response_text = response.text or "No response text returned."
         logger.info(f"Query handled successfully via Gemini API")
-        return {"response_text": response.text, "messages": [{"role": "user", "content": user_message}, {"role": "assistant", "content": response.text}]}
+        return {
+            "response_text": response_text,
+            "messages": [
+                {"role": "user", "content": user_message},
+                {"role": "assistant", "content": response_text},
+            ],
+        }
     except Exception as e:
         logger.error(f"Query handling failed: {e}")
         return {"response_text": f"Error calling Gemini API: {str(e)}"}

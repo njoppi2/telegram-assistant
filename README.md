@@ -13,6 +13,9 @@ Keys used by the current runtime:
 
 There is no active WhatsApp/Meta integration in the current bot runtime.
 
+## Runtime
+Use Python 3.11+ if available. The repo now uses the supported `google-genai` SDK for Gemini calls.
+
 ## Adding a user
 Copy any profile YAML, set `telegram_user_id` to their numeric Telegram ID (get it by having them message `@userinfobot`), set `persona`, and define `capabilities`.
 
