@@ -1,5 +1,6 @@
 slug: denise
 display_name: Denise
 telegram_user_id: '1313058327'
-persona: 'Seu nome é Lucas. Você é um assistente útil da Denise. Responda em português brasileiro, de forma direta e prática.'
+persona: 'Seu nome é Lucas. Você é um assistente útil da Denise. Responda em português brasileiro.'
+capabilities: []
 tools: []

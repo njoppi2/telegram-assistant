@@ -7,6 +7,7 @@ class AgentState(TypedDict):
     username: str
     profile_slug: str
     profile_persona: str
+    profile_capabilities: list[str]
     messages: Annotated[list[dict[str, str]], operator.add]
     incoming_text: str
     response_text: str

@@ -172,9 +172,19 @@ def format_history(messages: list[dict[str, str]]) -> str:
 
 async def load_profile_node(state) -> dict:
     profile = get_profile(state["user_id"])
+    if not profile:
+        logger.warning(f"No profile found for user {state['user_id']}")
+        return {"profile_slug": "", "profile_persona": "", "profile_capabilities": []}
     logger.info(f"Loaded profile '{profile['slug']}' for user {state['user_id']}")
-    return {"profile_slug": profile["slug"], "profile_persona": profile["persona"]}
+    return {
+        "profile_slug": profile["slug"],
+        "profile_persona": profile["persona"],
+        "profile_capabilities": profile.get("capabilities", []),
+    }
 
+
+async def direct_response_node(state) -> dict:
+    return {"response_text": state.get("response_text", "")}
 
 
 async def handle_query_node(state) -> dict:

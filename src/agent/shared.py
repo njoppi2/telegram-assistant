@@ -29,14 +29,6 @@ action_limiter = AsyncLimiter(5, 60)
 async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS auth (
-                user_id TEXT PRIMARY KEY,
-                failed_attempts INTEGER DEFAULT 0,
-                is_blocked INTEGER DEFAULT 0,
-                is_authenticated INTEGER DEFAULT 0
-            )
-        """)
-        await db.execute("""
             CREATE TABLE IF NOT EXISTS history (
                 user_id TEXT PRIMARY KEY,
                 messages_json TEXT
@@ -61,26 +53,6 @@ async def init_db():
             pass  # column already exists
         await db.commit()
         logger.info("SQLite database initialized.")
-
-async def get_user_auth(user_id: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        async with db.execute("SELECT failed_attempts, is_blocked, is_authenticated FROM auth WHERE user_id = ?", (user_id,)) as cursor:
-            row = await cursor.fetchone()
-            if row:
-                return {"failed_attempts": row[0], "is_blocked": row[1], "is_authenticated": row[2]}
-            return {"failed_attempts": 0, "is_blocked": 0, "is_authenticated": 0}
-
-async def update_user_auth(user_id: str, failed_attempts: int, is_blocked: int, is_authenticated: int):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            INSERT INTO auth (user_id, failed_attempts, is_blocked, is_authenticated)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET
-                failed_attempts = excluded.failed_attempts,
-                is_blocked = excluded.is_blocked,
-                is_authenticated = excluded.is_authenticated
-        """, (user_id, failed_attempts, is_blocked, is_authenticated))
-        await db.commit()
 
 async def get_user_history(user_id: str):
     async with aiosqlite.connect(DB_PATH) as db:

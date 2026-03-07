@@ -1,6 +1,6 @@
-from src.router.profiles import get_default_profile, load_profiles
+from src.router.profiles import load_profiles
 
 
-def get_profile(user_id: str) -> dict:
+def get_profile(user_id: str) -> dict | None:
     profiles = load_profiles()
-    return profiles.get(str(user_id), get_default_profile())
+    return profiles.get(str(user_id))

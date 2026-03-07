@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
     GOOGLE_API_KEY: str = ""
-    AUTH_PASSWORD: str = ""
     DEBUG: bool = False
     ARCH_GYM_PATH: str = ""
 

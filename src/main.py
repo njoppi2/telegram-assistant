@@ -1,7 +1,5 @@
 import logging
-import signal
 import asyncio
-from pathlib import Path
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -11,10 +9,9 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 from src.agent.graph import agent_graph
 import src.agent.shared as shared
 from src.config import settings
+from src.router.router import get_profile
 
 logger = logging.getLogger(__name__)
-
-MAX_FAILED_ATTEMPTS = 10
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -27,6 +24,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     username = update.effective_user.username or ""
     text = update.message.text
+    profile = get_profile(user_id)
 
     # Command to kill the last execution
     if text.strip() in ("/kill", "MATAR"):
@@ -63,34 +61,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         shared.active_status_messages.pop(user_id, None)
         return
 
-    # If no password is configured, disable the auth gate entirely.
-    auth_password = settings.AUTH_PASSWORD.strip()
-    if not auth_password:
-        auth = {"failed_attempts": 0, "is_blocked": 0, "is_authenticated": 1}
-    else:
-        # Load auth state from SQLite only when auth is enabled.
-        auth = await shared.get_user_auth(user_id)
-    
-    if auth["is_blocked"]:
-        logger.warning(f"Blocked user {user_id} attempted message")
-        return
-
-    if not auth["is_authenticated"]:
-        if text.strip() == auth_password:
-            await shared.update_user_auth(user_id, failed_attempts=0, is_blocked=0, is_authenticated=1)
-            logger.info(f"User {user_id} authenticated successfully")
-            await update.message.reply_text("Access granted. You can now use the bot.")
-        else:
-            new_failed = auth["failed_attempts"] + 1
-            is_blocked = 1 if new_failed >= MAX_FAILED_ATTEMPTS else 0
-            await shared.update_user_auth(user_id, failed_attempts=new_failed, is_blocked=is_blocked, is_authenticated=0)
-            
-            logger.warning(f"Failed auth attempt for user {user_id}: {new_failed} attempts")
-            if is_blocked:
-                logger.error(f"User {user_id} blocked after {MAX_FAILED_ATTEMPTS} failed attempts")
-                return
-            remaining = MAX_FAILED_ATTEMPTS - new_failed
-            await update.message.reply_text(f"This bot is password protected. Send the password to access. ({remaining} attempts remaining)")
+    if not profile:
+        logger.warning(f"Unrecognized user {user_id} attempted message")
+        await update.message.reply_text("Unknown ID. This bot is private.")
         return
 
     # LOCK and PROCESS
@@ -108,8 +81,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             initial_state = {
                 "user_id": user_id,
                 "username": username,
-                "profile_slug": "",
-                "profile_persona": "",
+                "profile_slug": profile["slug"],
+                "profile_persona": profile["persona"],
+                "profile_capabilities": profile.get("capabilities", []),
                 "messages": history,
                 "incoming_text": text,
                 "response_text": "",

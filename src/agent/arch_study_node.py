@@ -18,7 +18,7 @@ from src.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-STUDY_COMMANDS = {"/study", "/skip", "/stop", "/stats", "/archstats", "/cancel", "/quit", "/help", "/run"}
+STUDY_COMMANDS = {"/study", "/skip", "/stop", "/stats", "/archstats", "/cancel", "/quit"}
 
 
 def _get_topic_core():
@@ -34,19 +34,44 @@ async def check_study_session_node(state: AgentState) -> dict:
     user_id = state["user_id"]
     text = state["incoming_text"].strip()
     cmd = text.lower().split()[0] if text else ""
+    capabilities = set(state.get("profile_capabilities", []))
+    has_study = "study" in capabilities
+    has_run = "run" in capabilities
 
     if cmd == "/run":
+        if not has_run:
+            return {
+                "intent": "direct_response",
+                "response_text": "This command is not enabled for your profile.",
+                "study_session": None,
+            }
         remainder = text[4:].strip()
         if not remainder:
             return {"intent": "arch_study", "study_session": None}
         return {"intent": "action", "incoming_text": remainder, "study_session": None}
 
+    if cmd == "/help":
+        if has_study or has_run:
+            return {"intent": "arch_study", "study_session": None}
+        return {
+            "intent": "direct_response",
+            "response_text": "This command is not enabled for your profile.",
+            "study_session": None,
+        }
+
     if cmd in STUDY_COMMANDS:
+        if not has_study:
+            return {
+                "intent": "direct_response",
+                "response_text": "This command is not enabled for your profile.",
+                "study_session": None,
+            }
         return {"intent": "arch_study", "study_session": None}
 
-    session = await get_study_session(user_id)
-    if session:
-        return {"intent": "arch_study", "study_session": session}
+    if has_study:
+        session = await get_study_session(user_id)
+        if session:
+            return {"intent": "arch_study", "study_session": session}
 
     return {"intent": "", "study_session": None}
 
